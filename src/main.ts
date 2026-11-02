@@ -13,7 +13,7 @@ import {
 } from "./catalog";
 import { buildFontEmbedCss, ensureFonts, fontFamilyStack } from "./fonts";
 import { renderMarkdown } from "./render";
-import { exportPng } from "./export";
+import { copyPngToClipboard, downloadBlob, pngFilename, renderPngBlob } from "./export";
 import {
   DEFAULT_FONT_IDS,
   DEFAULT_MARKDOWN,
@@ -38,6 +38,7 @@ const refs = {
   fontBtnTop: $<HTMLButtonElement>("fontBtnTop"),
   fontNameTop: $("fontNameTop"),
   exportBtn: $<HTMLButtonElement>("exportBtn"),
+  copyPngBtn: $<HTMLButtonElement>("copyPngBtn"),
   mdInput: $<HTMLTextAreaElement>("mdInput"),
   metrics: $("metrics"),
   cjkWarn: $("cjkWarn"),
@@ -91,6 +92,8 @@ let current: FontItem[] = [];
 let urlTimer: number | undefined;
 let markdownTimer: number | undefined;
 let scrollRaf = 0;
+let pngBusy = false;
+let embedCssCache: { key: string; css: string } | null = null;
 
 // ---------- 小工具 ----------
 function toast(message: string): void {
@@ -150,7 +153,7 @@ function fit(): void {
   const height = refs.canvas.offsetHeight;
   refs.canvasScaler.style.width = `${Math.round(state.w * scale)}px`;
   refs.canvasScaler.style.height = `${Math.round(height * scale)}px`;
-  refs.metrics.textContent = `输出 ${state.w} × ${height} px · 预览 ${Math.round(scale * 100)}%`;
+  refs.metrics.textContent = `Output ${state.w} × ${height} px · Preview ${Math.round(scale * 100)}%`;
 }
 
 function updateUrlUi(): void {
@@ -266,7 +269,7 @@ function buildPresetUi(): void {
   }
   const customOption = document.createElement("option");
   customOption.value = PRESET_CUSTOM;
-  customOption.textContent = "自定义";
+  customOption.textContent = "Custom";
   refs.preset.appendChild(customOption);
 
   refs.presetChips.innerHTML = "";
@@ -274,11 +277,11 @@ function buildPresetUi(): void {
     const chip = el("button", "chip", preset.label);
     chip.type = "button";
     chip.dataset.preset = key;
-    chip.title = "只调整宽度和字号，已选字体保留";
+    chip.title = "Preset sets width and text size; fonts are kept";
     chip.addEventListener("click", () => setPreset(key));
     refs.presetChips.appendChild(chip);
   }
-  const customChip = el("button", "chip", "自定义");
+  const customChip = el("button", "chip", "Custom");
   customChip.type = "button";
   customChip.dataset.preset = PRESET_CUSTOM;
   customChip.addEventListener("click", () => setPreset(PRESET_CUSTOM));
@@ -305,7 +308,13 @@ function applyCatalog(raw: CatalogRaw): void {
   updateFontButtons();
   applyState();
   replaceUrl(state);
-  void loadStackFonts().then(applyStyle);
+  void loadStackFonts()
+    .then(applyStyle)
+    .then(() => {
+      requestIdle(() => {
+        void getEmbedCss().catch(() => undefined);
+      });
+    });
 }
 
 function requestIdle(callback: () => void): void {
@@ -318,10 +327,10 @@ function requestIdle(callback: () => void): void {
 
 function showCatalogError(error: unknown): void {
   console.error(error);
-  refs.fontSummary.textContent = "字体目录加载失败";
+  refs.fontSummary.textContent = "Font catalog failed to load";
   refs.fontSpacer.innerHTML = "";
   refs.fontSpacer.appendChild(
-    el("div", "font-error", "无法从 api.fontsource.org 加载字体目录。检查网络后刷新页面。"),
+    el("div", "font-error", "Could not load the font catalog from api.fontsource.org. Check your network and reload the page."),
   );
   refs.clearFilters.hidden = true;
 }
@@ -347,9 +356,9 @@ function buildFontChips(): void {
 
   refs.flagChips.innerHTML = "";
   const flags: Array<[keyof Pick<Filters, "cjk" | "bold" | "variable">, string]> = [
-    ["cjk", "中文"],
-    ["bold", "含粗体"],
-    ["variable", "可变字体"],
+    ["cjk", "Chinese"],
+    ["bold", "Bold"],
+    ["variable", "Variable"],
   ];
   for (const [key, label] of flags) {
     const chip = el("button", "chip", label);
@@ -430,9 +439,9 @@ function updateCounts(): void {
     filters.variable;
   refs.clearFilters.hidden = !active;
   if (catalog) {
-    refs.fontSummary.textContent = `符合 ${current.length} / ${catalog.fonts.length} 个字体`;
+    refs.fontSummary.textContent = `${current.length} / ${catalog.fonts.length} fonts`;
   }
-  refs.fontCount.textContent = `${current.length} 个 · 已选 ${state.fontIds.length}`;
+  refs.fontCount.textContent = `${current.length} fonts · ${state.fontIds.length} selected`;
 }
 
 // ---------- 字体列表（虚拟滚动） ----------
@@ -444,7 +453,7 @@ function drawRows(): void {
   const end = Math.min(current.length, Math.ceil((scroll.scrollTop + (scroll.clientHeight || 600)) / ROW_HEIGHT) + 4);
   spacer.innerHTML = "";
   if (!current.length) {
-    spacer.appendChild(el("div", "font-empty", "没有符合条件的字体。"));
+    spacer.appendChild(el("div", "font-empty", "No matching fonts."));
     return;
   }
   for (let index = start; index < end; index += 1) {
@@ -456,9 +465,9 @@ function drawRows(): void {
     row.setAttribute("aria-selected", selected ? "true" : "false");
     row.appendChild(el("span", "fname", font.family));
     const meta = el("span", "meta");
-    if (selected) meta.appendChild(el("span", "tag sel", "已选"));
+    if (selected) meta.appendChild(el("span", "tag sel", "Selected"));
     if (font.tags.includes("sans/grotesque")) meta.appendChild(el("span", "tag", "grotesque"));
-    if (font.subsets.includes("chinese-simplified")) meta.appendChild(el("span", "tag cjk", "中文"));
+    if (font.subsets.includes("chinese-simplified")) meta.appendChild(el("span", "tag cjk", "Chinese"));
     if (font.weights.includes(700)) meta.appendChild(el("span", "tag bold", "bold"));
     row.appendChild(meta);
     row.addEventListener("click", () => toggleFont(font.id));
@@ -469,7 +478,7 @@ function drawRows(): void {
 function toggleFont(id: string): void {
   if (state.fontIds.includes(id)) {
     if (state.fontIds.length <= 1) {
-      toast("至少保留一个字体");
+      toast("At least one font is required");
       return;
     }
     setFontIds(state.fontIds.filter((item) => item !== id));
@@ -481,14 +490,14 @@ function toggleFont(id: string): void {
 function renderSelectedBar(): void {
   const bar = refs.selectedBar;
   bar.innerHTML = "";
-  bar.appendChild(el("span", "sel-label", "已选"));
+  bar.appendChild(el("span", "sel-label", "Selected"));
   orderedFontIds().forEach((id, index) => {
     const chip = el("span", "sel-chip");
     chip.appendChild(el("span", "idx", String(index + 1)));
     chip.appendChild(document.createTextNode(fontLabel(id)));
     const remove = el("button", "", "×");
     remove.type = "button";
-    remove.title = "移除";
+    remove.title = "Remove";
     remove.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleFont(id);
@@ -553,43 +562,62 @@ function showTab(which: "editor" | "stage"): void {
 }
 
 // ---------- 导出 / 复制 ----------
-async function onExport(): Promise<void> {
-  const label = refs.exportBtn.textContent;
+async function getEmbedCss(): Promise<string> {
+  if (!catalog) return "";
+  const ids = orderedFontIds();
+  const key = ids.join(",");
+  if (embedCssCache && embedCssCache.key === key) return embedCssCache.css;
+  const css = await buildFontEmbedCss(catalog, ids);
+  embedCssCache = { key, css };
+  return css;
+}
+
+async function runPngTask(
+  kind: "export" | "copy",
+  task: (embedCss: string, height: number) => Promise<void>,
+): Promise<void> {
+  if (pngBusy) return;
+  pngBusy = true;
   refs.exportBtn.disabled = true;
-  refs.exportBtn.textContent = "导出中…";
+  refs.copyPngBtn.disabled = true;
+  if (kind === "export") refs.exportBtn.textContent = "Exporting…";
+  else refs.copyPngBtn.textContent = "Copying…";
   try {
-    if (catalog) {
-      await loadStackFonts();
-      const embedCss = await buildFontEmbedCss(catalog, orderedFontIds());
-      const height = refs.canvas.offsetHeight;
-      await exportPng({
-        node: refs.canvas,
-        fontEmbedCss: embedCss,
-        filename: `markdown-${state.w}x${height}.png`,
-      });
-    } else {
-      const height = refs.canvas.offsetHeight;
-      await exportPng({
-        node: refs.canvas,
-        fontEmbedCss: "",
-        filename: `markdown-${state.w}x${height}.png`,
-      });
-    }
+    await loadStackFonts();
+    const embedCss = await getEmbedCss();
+    await task(embedCss, refs.canvas.offsetHeight);
   } catch (error) {
     console.error(error);
-    toast("导出失败，请重试");
+    toast(kind === "copy" ? "Copy failed — use Export PNG" : "Export failed, try again");
   } finally {
+    pngBusy = false;
     refs.exportBtn.disabled = false;
-    refs.exportBtn.textContent = label;
+    refs.copyPngBtn.disabled = false;
+    refs.exportBtn.textContent = "Export PNG";
+    refs.copyPngBtn.textContent = "Copy PNG";
   }
+}
+
+function onExport(): void {
+  void runPngTask("export", async (embedCss, height) => {
+    const blob = await renderPngBlob({ node: refs.canvas, fontEmbedCss: embedCss });
+    downloadBlob(blob, pngFilename(state.w, height));
+  });
+}
+
+function onCopyPng(): void {
+  void runPngTask("copy", async (embedCss) => {
+    await copyPngToClipboard({ node: refs.canvas, fontEmbedCss: embedCss });
+    toast("PNG copied to clipboard");
+  });
 }
 
 async function copyShareUrl(): Promise<void> {
   try {
     await navigator.clipboard.writeText(currentUrl(state));
-    toast("已复制链接");
+    toast("Link copied");
   } catch {
-    toast("复制失败，请手动复制地址栏");
+    toast("Copy failed — copy the address bar manually");
   }
 }
 
@@ -621,7 +649,8 @@ function bindEvents(): void {
   refs.tabPreview.addEventListener("click", () => showTab("stage"));
 
   refs.mdInput.addEventListener("input", scheduleMarkdown);
-  refs.exportBtn.addEventListener("click", () => void onExport());
+  refs.exportBtn.addEventListener("click", () => onExport());
+  refs.copyPngBtn.addEventListener("click", () => onCopyPng());
   refs.copyBtn.addEventListener("click", () => void copyShareUrl());
   refs.copyBtnM.addEventListener("click", () => void copyShareUrl());
 

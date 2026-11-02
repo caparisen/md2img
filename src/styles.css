@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Work Sans UI";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Work Sans UI";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-600-normal.woff2") format("woff2");
+}
+
 :root {
   --ui-bg: #f1f0ec;
   --panel: #ffffff;
@@ -31,7 +47,7 @@ body {
   margin: 0;
   background: var(--ui-bg);
   color: var(--ink);
-  font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 500 13px/1.5 "Work Sans UI", system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -44,6 +60,11 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+b,
+strong {
+  font-weight: 600;
 }
 
 .desktop-only {
@@ -235,7 +256,7 @@ textarea {
   outline: 0;
   padding: 14px 16px;
   background: #fcfbf8;
-  font: 12.5px/1.8 ui-monospace, "Cascadia Mono", Consolas, "Microsoft YaHei", monospace;
+  font: 500 13px/1.8 "Work Sans UI", system-ui, "Microsoft YaHei", sans-serif;
   color: #333;
 }
 
@@ -859,8 +880,9 @@ textarea {
     padding: 8px 12px;
   }
 
-  .topbar .primary {
-    padding: 7px 12px;
+  .topbar .primary,
+  .topbar .ghost {
+    padding: 7px 10px;
     font-size: 12.5px;
   }
 

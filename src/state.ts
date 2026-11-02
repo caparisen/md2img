@@ -5,9 +5,9 @@ export interface Preset {
 }
 
 export const PRESETS: Record<string, Preset> = {
-  "wechat-iphone": { label: "微信缩略图", w: 1080, fs: 72 },
-  "wechat-large": { label: "微信大字版", w: 1080, fs: 96 },
-  "hd-long": { label: "高清长图", w: 1440, fs: 96 },
+  "wechat-iphone": { label: "WeChat thumbnail", w: 1080, fs: 72 },
+  "wechat-large": { label: "WeChat large type", w: 1080, fs: 96 },
+  "hd-long": { label: "HD long image", w: 1440, fs: 96 },
 };
 
 export const PRESET_CUSTOM = "custom";
