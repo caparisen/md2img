@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <title>Markdown → 图片</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><b>Markdown → 图片</b></div>
+
+    <div class="toolbar desktop-only">
+      <div class="field">
+        <label for="preset">preset</label>
+        <select id="preset" class="sel" title="preset 只调整宽度和字号，已选字体保留"></select>
+      </div>
+      <div class="field">
+        <label for="width">宽度</label>
+        <input id="width" class="num" type="number" min="240" max="4320" step="2" />
+        <span class="unit">px</span>
+      </div>
+      <div class="field">
+        <label for="fontsize">字号</label>
+        <input id="fontsize" class="num" type="number" min="12" max="240" step="1" />
+        <span class="unit">px</span>
+      </div>
+    </div>
+
+    <button id="fontBtnTop" class="font-btn desktop-only" type="button">
+      <span class="name" id="fontNameTop"></span>
+      <span class="chev">▾</span>
+    </button>
+
+    <div class="spacer"></div>
+    <button id="exportBtn" class="primary" type="button">导出 PNG</button>
+  </header>
+
+  <div class="workspace">
+    <section class="pane editor" id="editorPane">
+      <div class="pane-head">
+        <b>Markdown</b>
+      </div>
+      <textarea id="mdInput" spellcheck="false" aria-label="Markdown 输入"></textarea>
+    </section>
+
+    <section class="pane stage" id="stagePane">
+      <div class="stage-bar">
+        <span class="metrics" id="metrics"></span>
+        <span class="spacer"></span>
+        <span class="warn" id="cjkWarn" hidden>该字体无中文字形，中文回退系统字体</span>
+      </div>
+      <div class="stage-scroll" id="stageScroll">
+        <div class="canvas-scaler" id="canvasScaler">
+          <div class="canvas-wrap" id="canvasWrap">
+            <div class="md" id="canvas"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="bottombar">
+    <div class="urlline desktop-only">
+      <label>分享链接</label>
+      <input id="urlOut" readonly spellcheck="false" aria-label="分享链接" />
+      <button id="copyBtn" class="ghost" type="button">复制</button>
+    </div>
+    <nav class="mobile-tabs mobile-only">
+      <button id="tabEditor" type="button">编辑</button>
+      <button id="tabPreview" type="button" class="active">预览</button>
+      <button id="openParams" type="button">参数</button>
+    </nav>
+  </footer>
+
+  <div class="scrim" id="scrim"></div>
+
+  <section class="sheet params-sheet" id="paramsSheet">
+    <div class="sheet-head">
+      <b>参数</b><span class="spacer"></span>
+      <button class="sheet-close" id="paramsClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="params-body">
+      <div class="param-row">
+        <label>preset</label>
+        <div class="chips" id="presetChips"></div>
+      </div>
+      <div class="param-row">
+        <label>宽度</label>
+        <button class="chip step" id="wMinus" type="button">−</button>
+        <input id="widthM" class="num" type="number" min="240" max="4320" step="2" aria-label="宽度" />
+        <button class="chip step" id="wPlus" type="button">+</button>
+        <span class="unit">px</span>
+      </div>
+      <div class="param-row">
+        <label>字号</label>
+        <button class="chip step" id="fsMinus" type="button">−</button>
+        <input id="fontsizeM" class="num" type="number" min="12" max="240" step="1" aria-label="字号" />
+        <button class="chip step" id="fsPlus" type="button">+</button>
+        <span class="unit">px</span>
+      </div>
+      <div class="param-row">
+        <label>字体</label>
+        <button id="fontBtnM" class="font-btn" type="button">
+          <span class="name" id="fontNameM"></span><span class="chev">▾</span>
+        </button>
+      </div>
+      <div class="param-row">
+        <label>链接</label>
+        <input id="urlOutM" class="url-mini" readonly spellcheck="false" aria-label="分享链接" />
+        <button id="copyBtnM" class="ghost" type="button">复制</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet font-panel" id="fontPanel">
+    <div class="sheet-head">
+      <b>选择字体</b>
+      <span class="spacer"></span>
+      <span id="fontCount" class="muted small"></span>
+      <button class="sheet-close" id="fontClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="search">
+      <input id="fontSearch" type="text" placeholder="搜索字体名称、风格、分类，可多选" autocomplete="off" />
+    </div>
+    <div class="chips-wrap">
+      <div class="chips-row"><span class="chip-label">分类</span><div class="chips" id="clsChips"></div></div>
+      <div class="chips-row"><span class="chip-label">风格</span><div class="chips" id="groupTabs"></div></div>
+      <div class="chips-row"><span class="chip-label"></span><div class="chips" id="tagChips"></div></div>
+      <div class="chips-row"><span class="chip-label">属性</span><div class="chips" id="flagChips"></div></div>
+    </div>
+    <div class="font-count">
+      <span id="fontSummary">正在加载字体目录…</span>
+      <button id="clearFilters" class="link-btn" type="button" hidden>清空筛选</button>
+    </div>
+    <div class="selected-bar" id="selectedBar"></div>
+    <div class="font-scroll" id="fontScroll">
+      <div class="font-spacer" id="fontSpacer"></div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
